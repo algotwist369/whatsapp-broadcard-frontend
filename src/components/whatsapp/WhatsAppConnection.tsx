@@ -140,12 +140,14 @@ export const WhatsAppConnectionComponent = memo(({ onConnectionChange }: WhatsAp
         setShowQR(true);
         toast.success('QR code refreshed!');
       } else {
-        toast.error('QR code not available. Please try connecting again.');
+        // Silently handle when no QR available - this is expected
+        console.log('No QR code available - connection may not be active');
       }
     } catch (error: any) {
       console.error('Refresh QR error:', error);
-      if (error.response?.status === 400) {
-        toast.error('No active connection. Please click "Connect WhatsApp" first.');
+      // 404 and 400 are expected when no active connection - don't show error to user
+      if (error.response?.status === 404 || error.response?.status === 400) {
+        console.log('No active connection for QR refresh (expected behavior)');
       } else {
         toast.error('Failed to get QR code. Please try connecting again.');
       }

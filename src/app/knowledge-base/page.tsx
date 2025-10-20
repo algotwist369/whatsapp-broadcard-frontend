@@ -14,6 +14,7 @@ import {
   DocumentIcon,
 } from '@heroicons/react/24/outline';
 import axios from 'axios';
+import { knowledgeBaseApi } from '@/lib/api';
 
 interface KnowledgeBase {
   _id: string;
@@ -59,6 +60,7 @@ export default function KnowledgeBasePage() {
   // Upload form state
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [category, setCategory] = useState('business_details');
+  const [categories, setCategories] = useState<string[]>([]);
   const [description, setDescription] = useState('');
 
   useEffect(() => {
@@ -72,18 +74,10 @@ export default function KnowledgeBasePage() {
   const fetchKnowledgeBases = async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem('token');
-      const API_URL = ('http://localhost:5000') + '/api' || process.env.NEXT_PUBLIC_API_URL;
-      const response = await axios.get(
-        `${API_URL}/knowledge-base`,
-        {
-          headers: { Authorization: `Bearer ${token}` }
-        }
-      );
-
-      if (response.data.success) {
-        setKnowledgeBases(response.data.data.knowledgeBases);
-        setSummary(response.data.data.summary);
+      const response = await knowledgeBaseApi.list();
+      if (response.success) {
+        setKnowledgeBases(response.data.knowledgeBases);
+        setSummary(response.data.summary);
       }
     } catch (error: any) {
       console.error('Error fetching knowledge bases:', error);
@@ -130,17 +124,8 @@ export default function KnowledgeBasePage() {
         formData.append('description', description);
       }
 
-      const API_URL = ('http://localhost:5000') + '/api' || process.env.NEXT_PUBLIC_API_URL;
-      const response = await axios.post(
-        `${API_URL}/knowledge-base/upload`,
-        formData,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'multipart/form-data'
-          }
-        }
-      );
+      const selectedCategories = categories.length > 0 ? categories : [category];
+      const response = await knowledgeBaseApi.upload(selectedFile, { categories: selectedCategories, description });
 
       if (response.data.success) {
         toast.success('File uploaded! Processing in background...');
@@ -166,13 +151,7 @@ export default function KnowledgeBasePage() {
     }
 
     try {
-      const API_URL = ('http://localhost:5000') + '/api' || process.env.NEXT_PUBLIC_API_URL;
-      const response = await axios.delete(
-        `${API_URL}/knowledge-base/${id}`,
-        {
-          headers: { Authorization: `Bearer ${token}` }
-        }
-      );
+      const response = await knowledgeBaseApi.remove(id);
 
       if (response.data.success) {
         toast.success('Knowledge base deleted successfully');
@@ -186,14 +165,7 @@ export default function KnowledgeBasePage() {
 
   const handleToggleActive = async (id: string, currentStatus: boolean) => {
     try {
-      const API_URL = ('http://localhost:5000') + '/api' || process.env.NEXT_PUBLIC_API_URL;
-      const response = await axios.put(
-        `${API_URL}/knowledge-base/${id}/activate`,
-        { isActive: !currentStatus },
-        {
-          headers: { Authorization: `Bearer ${token}` }
-        }
-      );
+      const response = await knowledgeBaseApi.toggleActive(id, !currentStatus);
 
       if (response.data.success) {
         toast.success(`Knowledge base ${!currentStatus ? 'activated' : 'deactivated'}`);
@@ -213,17 +185,7 @@ export default function KnowledgeBasePage() {
 
     try {
       setTesting(true);
-      const API_URL = ('http://localhost:5000') + '/api' || process.env.NEXT_PUBLIC_API_URL;
-      const response = await axios.post(
-        `${API_URL}/knowledge-base/test-answer`,
-        {
-          query: testQuery,
-          customerName: 'Test Customer'
-        },
-        {
-          headers: { Authorization: `Bearer ${token}` }
-        }
-      );
+      const response = await knowledgeBaseApi.testAnswer({ query: testQuery, customerName: 'Test Customer' });
 
       if (response.data.success) {
         setTestResult(response.data.data);
@@ -360,23 +322,42 @@ export default function KnowledgeBasePage() {
                   )}
                 </div>
 
-                {/* Category */}
+                {/* Categories */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Category
+                    Categories (select one or more)
                   </label>
-                  <select
-                    value={category}
-                    onChange={(e) => setCategory(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="business_details">Business Details</option>
-                    <option value="services">Services</option>
-                    <option value="pricing">Pricing</option>
-                    <option value="faq">FAQ / Q&A</option>
-                    <option value="policies">Policies</option>
-                    <option value="general">General</option>
-                  </select>
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      { key: 'business_details', label: 'Business Details' },
+                      { key: 'services', label: 'Services' },
+                      { key: 'pricing', label: 'Pricing' },
+                      { key: 'faq', label: 'FAQ / Q&A' },
+                      { key: 'policies', label: 'Policies' },
+                      { key: 'general', label: 'General' },
+                    ].map((opt) => {
+                      const checked = categories.includes(opt.key);
+                      return (
+                        <label key={opt.key} className="flex items-center space-x-2 text-sm">
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4"
+                            checked={checked}
+                            onChange={(e) => {
+                              setCategories((prev) => {
+                                if (e.target.checked) return Array.from(new Set([...prev, opt.key]));
+                                return prev.filter((c) => c !== opt.key);
+                              });
+                              // Keep single-select fallback in sync with first selected
+                              setCategory((prev) => (categories.length === 0 ? opt.key : prev));
+                            }}
+                          />
+                          <span>{opt.label}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                  <p className="mt-2 text-xs text-gray-500">Tip: If your PDF contains multiple types of info, pick all relevant categories.</p>
                 </div>
 
                 {/* Description */}
@@ -562,9 +543,19 @@ export default function KnowledgeBasePage() {
                             </div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <span className={`px-2 py-1 text-xs font-medium rounded-full ${getCategoryBadgeColor(kb.category)}`}>
-                              {kb.category.replace('_', ' ')}
-                            </span>
+                            <div className="flex flex-wrap gap-1">
+                              {Array.isArray((kb as any).categories) && (kb as any).categories.length > 0 ? (
+                                (kb as any).categories.map((cat: string) => (
+                                  <span key={cat} className={`px-2 py-1 text-xs font-medium rounded-full ${getCategoryBadgeColor(cat)}`}>
+                                    {cat.replace('_', ' ')}
+                                  </span>
+                                ))
+                              ) : (
+                                <span className={`px-2 py-1 text-xs font-medium rounded-full ${getCategoryBadgeColor(kb.category)}`}>
+                                  {kb.category.replace('_', ' ')}
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             {getStatusBadge(kb.processingStatus)}

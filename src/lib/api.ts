@@ -13,7 +13,7 @@ import {
   BulkMessageFormData
 } from '@/types';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL + '/api' || 'http://localhost:5000/api';
 console.log("API_BASE_URL", API_BASE_URL);
 
 // Request cache and deduplication
@@ -471,6 +471,44 @@ export const autoReplyApi = {
 
   deleteReplyData: async (id: string): Promise<ApiResponse<any>> => {
     const response = await api.delete(`/auto-reply/data/${id}`);
+    return response.data;
+  },
+};
+
+// Knowledge Base API
+export const knowledgeBaseApi = {
+  list: async (): Promise<ApiResponse<any>> => {
+    const response = await api.get('/knowledge-base');
+    return response.data;
+  },
+
+  upload: async (file: File, data: { category?: string; categories?: string[]; description?: string }): Promise<ApiResponse<any>> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (data.category) formData.append('category', data.category);
+    if (data.categories && data.categories.length > 0) {
+      data.categories.forEach((c) => formData.append('categories', c));
+    }
+    if (data.description) formData.append('description', data.description);
+
+    const response = await api.post('/knowledge-base/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
+  },
+
+  remove: async (id: string): Promise<ApiResponse<any>> => {
+    const response = await api.delete(`/knowledge-base/${id}`);
+    return response.data;
+  },
+
+  toggleActive: async (id: string, isActive: boolean): Promise<ApiResponse<any>> => {
+    const response = await api.put(`/knowledge-base/${id}/activate`, { isActive });
+    return response.data;
+  },
+
+  testAnswer: async (payload: { query: string; customerName?: string }): Promise<ApiResponse<any>> => {
+    const response = await api.post('/knowledge-base/test-answer', payload);
     return response.data;
   },
 };

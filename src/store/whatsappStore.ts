@@ -293,6 +293,11 @@ export const useWhatsAppStore = create<WhatsAppStore>()(
           }
           return { success: false, qr: undefined };
         } catch (error: any) {
+          // 404 is expected when no active connection - not an error
+          if (error.response?.status === 404) {
+            console.log('WhatsApp Store - No active connection for QR refresh (expected)');
+            return { success: false, qr: undefined };
+          }
           console.error('WhatsApp Store - Refresh QR error:', error);
           return { success: false, qr: undefined };
         }
@@ -424,18 +429,29 @@ export const useWhatsAppStore = create<WhatsAppStore>()(
         }
         
         let pollCount = 0;
-        const maxPolls = 20; // Poll for up to 30 seconds (20 * 1.5 seconds)
+        const maxPolls = 5; // Only poll for 7.5 seconds (5 * 1.5 seconds) - faster timeout
         
-        console.log('🔄 Starting restoration polling...');
+        console.log('🔄 Starting restoration polling (max 7.5 seconds)...');
         
         // Start polling every 1.5 seconds
         const interval = setInterval(async () => {
           pollCount++;
           
-          // Stop polling after max attempts
+          // Stop polling after max attempts - restoration likely failed
           if (pollCount > maxPolls) {
-            console.log('⏰ Restoration polling timeout');
+            console.log('⏰ Restoration timeout - switching to fresh connection');
             get().stopConnectionPolling();
+            
+            // Auto-trigger fresh connection after restoration fails
+            setTimeout(() => {
+              console.log('🔄 Auto-triggering fresh connection after restoration timeout');
+              get().setStatus({
+                isConnected: false,
+                state: 'not_connected',
+                qr: undefined
+              });
+              // User can now click Connect to get fresh QR
+            }, 500);
             return;
           }
           
@@ -445,18 +461,23 @@ export const useWhatsAppStore = create<WhatsAppStore>()(
               console.log(`🔄 Restoration poll ${pollCount}/${maxPolls}:`, response.data);
               get().setStatus(response.data);
               
-              // Stop polling if connected or if state changed from restoring
-              if (response.data.isConnected || (response.data.state !== 'restoring' && response.data.state !== 'connecting')) {
-                console.log('✅ Restoration complete or state changed, stopping polling');
+              // Stop polling if connected, failed, or back to not_connected
+              if (response.data.isConnected || 
+                  response.data.state === 'not_connected' ||
+                  response.data.state === 'failed') {
+                console.log('✅ Restoration complete or failed, stopping polling');
                 get().stopConnectionPolling();
               }
             }
           } catch (error: any) {
             console.error('Error during restoration polling:', error);
-            // Stop polling on authentication errors
-            if (error.response?.status === 401) {
-              get().stopConnectionPolling();
-            }
+            // Stop polling on errors and reset to not_connected
+            get().stopConnectionPolling();
+            get().setStatus({
+              isConnected: false,
+              state: 'not_connected',
+              qr: undefined
+            });
           }
         }, 1500); // Poll every 1.5 seconds
         

@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
+import { useHydration } from '@/hooks/useHydration';
 
 interface AuthProviderProps {
   children: React.ReactNode;
@@ -23,7 +24,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const router = useRouter();
   const pathname = usePathname();
   const [hasCheckedAuth, setHasCheckedAuth] = useState(false);
-  const [isHydrated, setIsHydrated] = useState(false);
+  const isHydrated = useHydration();
 
   // Memoize public routes to prevent re-computation
   const publicRoutes = useMemo(() => [
@@ -37,10 +38,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
     [publicRoutes, pathname]
   );
 
-  // Handle hydration - only run once
-  useEffect(() => {
-    setIsHydrated(true);
-  }, []);
 
   // Memoized auth initialization
   const initializeAuth = useCallback(async () => {
